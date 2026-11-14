@@ -165,7 +165,10 @@ class SearchFilters(BaseModel):
     size: str | None = None
     in_stock_only: bool = True
 
-async def hybrid_search(query: str, filters: SearchFilters, top_k: int = 10) -> list[ProductHit]: ...
+
+async def hybrid_search(
+    query: str, filters: SearchFilters, top_k: int = 10
+) -> list[ProductHit]: ...
 ```
 
 ### 5.3 Retrieval evaluation
@@ -194,13 +197,14 @@ async def hybrid_search(query: str, filters: SearchFilters, top_k: int = 10) -> 
 ```python
 class Recommendation(BaseModel):
     product_id: str
-    reason: str            # one sentence, must reference real attributes
+    reason: str  # one sentence, must reference real attributes
+
 
 class AgentResponse(BaseModel):
-    message: str                           # text shown to the user
+    message: str  # text shown to the user
     recommendations: list[Recommendation]  # may be empty
     clarifying_question: str | None = None
-    assumptions: list[str] = []            # stated assumptions, if any
+    assumptions: list[str] = []  # stated assumptions, if any
 ```
 
 ### 6.3 Tools

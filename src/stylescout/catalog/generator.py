@@ -15,28 +15,46 @@ CATEGORIES = ["dress", "shirt", "trousers", "shoes", "jacket", "accessory"]
 COLORS = ["black", "white", "blue", "red", "green", "grey", "beige", "brown", "pink", "navy"]
 OCCASIONS = ["casual", "formal", "wedding", "sport", "evening", "outdoor"]
 BRANDS = [
-    "Zara", "H&M", "Mango", "Uniqlo", "COS", "Arket", "Weekday",
-    "& Other Stories", "Monki", "Pull&Bear",
+    "Zara",
+    "H&M",
+    "Mango",
+    "Uniqlo",
+    "COS",
+    "Arket",
+    "Weekday",
+    "& Other Stories",
+    "Monki",
+    "Pull&Bear",
 ]
 SIZES_BY_CATEGORY: dict[str, list[str]] = {
-    "dress":    ["XS", "S", "M", "L", "XL"],
-    "shirt":    ["XS", "S", "M", "L", "XL", "XXL"],
+    "dress": ["XS", "S", "M", "L", "XL"],
+    "shirt": ["XS", "S", "M", "L", "XL", "XXL"],
     "trousers": ["28", "30", "32", "34", "36", "38"],
-    "shoes":    ["36", "37", "38", "39", "40", "41", "42", "43"],
-    "jacket":   ["XS", "S", "M", "L", "XL"],
+    "shoes": ["36", "37", "38", "39", "40", "41", "42", "43"],
+    "jacket": ["XS", "S", "M", "L", "XL"],
     "accessory": ["ONE"],
 }
 PRICE_RANGE: dict[str, tuple[float, float]] = {
-    "dress":     (30.0, 200.0),
-    "shirt":     (20.0, 120.0),
-    "trousers":  (25.0, 150.0),
-    "shoes":     (40.0, 250.0),
-    "jacket":    (50.0, 350.0),
+    "dress": (30.0, 200.0),
+    "shirt": (20.0, 120.0),
+    "trousers": (25.0, 150.0),
+    "shoes": (40.0, 250.0),
+    "jacket": (50.0, 350.0),
     "accessory": (10.0, 80.0),
 }
 ADJECTIVES = [
-    "Classic", "Slim-fit", "Relaxed", "Oversized", "Cropped", "Flowy",
-    "Structured", "Wrap", "Ribbed", "Printed", "Striped", "Checked",
+    "Classic",
+    "Slim-fit",
+    "Relaxed",
+    "Oversized",
+    "Cropped",
+    "Flowy",
+    "Structured",
+    "Wrap",
+    "Ribbed",
+    "Printed",
+    "Striped",
+    "Checked",
 ]
 
 
@@ -50,9 +68,7 @@ def _make_description(name: str, color: str, category: str, occasion: str) -> st
 def _make_sizes(rng: np.random.Generator, category: str) -> tuple[str, int]:
     """Return (sizes JSON, in_stock flag)."""
     size_list = SIZES_BY_CATEGORY[category]
-    stock_per_size = {
-        s: int(rng.integers(0, 15)) for s in size_list
-    }
+    stock_per_size = {s: int(rng.integers(0, 15)) for s in size_list}
     in_stock = 1 if any(v > 0 for v in stock_per_size.values()) else 0
     return json.dumps(stock_per_size), in_stock
 

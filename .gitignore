@@ -9,3 +9,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Generated data
+data/chroma/
+data/catalog.db
