@@ -492,8 +492,7 @@ def test_catalog_index_missing_error_message_contains_build_command(
             )"""
         )
         conn.execute(
-            "INSERT INTO products VALUES"
-            " ('P1','T','dress','blue','X','casual','D',50.0,'{}',1)"
+            "INSERT INTO products VALUES ('P1','T','dress','blue','X','casual','D',50.0,'{}',1)"
         )
     with pytest.raises(CatalogIndexMissingError, match="uv run stylescout build-catalog"):
         search_filtered("dress", SearchFilters(in_stock_only=False), db_path=db)
@@ -512,14 +511,14 @@ def test_fts_special_chars_query_returns_safely(db_path: Path) -> None:
     word survived sanitization and the special character did not abort the query.
     """
     cases: list[tuple[str, str]] = [
-        ('"sneakers" dress', "PROD-00001"),       # double-quoted phrase + real word
-        ("black* jacket", "PROD-00002"),           # wildcard prefix + real word (in_stock=0)
+        ('"sneakers" dress', "PROD-00001"),  # double-quoted phrase + real word
+        ("black* jacket", "PROD-00002"),  # wildcard prefix + real word (in_stock=0)
         ("(dress OR shirt) dress", "PROD-00001"),  # parenthesised boolean + real word
-        ("category:dress dress", "PROD-00001"),    # column specifier + real word
-        ("AND OR NOT dress", "PROD-00001"),         # bare FTS keywords + real word
-        ("dress AND", "PROD-00001"),                # trailing operator
-        ("NEAR dress", "PROD-00001"),               # NEAR keyword
-        ("NEAR( dress", "PROD-00001"),              # NEAR with open paren
+        ("category:dress dress", "PROD-00001"),  # column specifier + real word
+        ("AND OR NOT dress", "PROD-00001"),  # bare FTS keywords + real word
+        ("dress AND", "PROD-00001"),  # trailing operator
+        ("NEAR dress", "PROD-00001"),  # NEAR keyword
+        ("NEAR( dress", "PROD-00001"),  # NEAR with open paren
     ]
     for query, expected_id in cases:
         results = search_filtered(query, SearchFilters(in_stock_only=False), db_path=db_path)
@@ -534,8 +533,7 @@ def test_all_punctuation_query_returns_filter_only(db_path: Path) -> None:
     for q in ['"', '""', "* ( )"]:
         results = search_filtered(q, SearchFilters(in_stock_only=False), db_path=db_path)
         assert len(results) == len(FIXTURE_PRODUCTS), (
-            f"Expected all {len(FIXTURE_PRODUCTS)} products for query {q!r}, "
-            f"got {len(results)}"
+            f"Expected all {len(FIXTURE_PRODUCTS)} products for query {q!r}, got {len(results)}"
         )
 
 
@@ -598,9 +596,7 @@ def test_fts_indexes_category_column(db_path: Path) -> None:
     or description, so a match can only come from the category column being
     in the FTS index.
     """
-    results = search_filtered(
-        "accessory", SearchFilters(in_stock_only=False), db_path=db_path
-    )
+    results = search_filtered("accessory", SearchFilters(in_stock_only=False), db_path=db_path)
     ids = {r.product_id for r in results}
     assert "PROD-00006" in ids, (
         "Expected PROD-00006 (category='accessory') in results; "
@@ -615,9 +611,7 @@ def test_fts_indexes_occasion_column(db_path: Path) -> None:
     or description, so a match can only come from the occasion column being
     in the FTS index.
     """
-    results = search_filtered(
-        "wedding", SearchFilters(in_stock_only=False), db_path=db_path
-    )
+    results = search_filtered("wedding", SearchFilters(in_stock_only=False), db_path=db_path)
     ids = {r.product_id for r in results}
     assert "PROD-00007" in ids, (
         "Expected PROD-00007 (occasion='wedding') in results; "

@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     chroma_path: str = "data/chroma"
     catalog_csv_path: str = "data/synthetic_catalog.csv"
 
+    # Hybrid search / RRF
+    # k=60 is the standard RRF constant (Cormack et al. 2009).
+    rrf_k: int = 60
+    rrf_kw_weight: float = 1.0
+    rrf_vec_weight: float = 1.0
+    hybrid_n_candidates: int = 50
+
     # API
     request_timeout_s: int = 30
     max_agent_steps: int = 6

@@ -216,8 +216,7 @@ def _require_fts_index(conn: sqlite3.Connection, db_path: Path) -> None:
     ).fetchone()
     if row is None:
         raise CatalogIndexMissingError(
-            f"FTS index missing at {db_path}; "
-            "run `uv run stylescout build-catalog`."
+            f"FTS index missing at {db_path}; run `uv run stylescout build-catalog`."
         )
 
 
