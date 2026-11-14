@@ -87,6 +87,36 @@ FIXTURE_PRODUCTS: list[dict[str, Any]] = [
         "sizes": json.dumps({"30": 0, "32": 0, "34": 0}),
         "in_stock": 0,
     },
+    # PROD-00006: category="accessory" but the word "accessory" does NOT appear
+    # in name, brand, color, or description.  A keyword search for "accessory"
+    # can only succeed if the FTS index includes the category column directly.
+    {
+        "product_id": "PROD-00006",
+        "name": "Pearl Stud",
+        "category": "accessory",
+        "color": "white",
+        "brand": "Avon",
+        "occasion": "formal",
+        "description": "Elegant pearl studs for evening wear.",
+        "price_eur": 19.99,
+        "sizes": json.dumps({"ONE": 8}),
+        "in_stock": 1,
+    },
+    # PROD-00007: occasion="wedding" but the word "wedding" does NOT appear in
+    # name, brand, color, or description.  A keyword search for "wedding" can
+    # only succeed if the FTS index includes the occasion column directly.
+    {
+        "product_id": "PROD-00007",
+        "name": "Ivory Pleated Midi",
+        "category": "dress",
+        "color": "ivory",
+        "brand": "Coast",
+        "occasion": "wedding",
+        "description": "Flowing pleated midi with delicate drape.",
+        "price_eur": 149.00,
+        "sizes": json.dumps({"XS": 2, "S": 4, "M": 3, "L": 1}),
+        "in_stock": 1,
+    },
 ]
 
 _CREATE_TABLE_SQL = """
@@ -448,6 +478,27 @@ def test_missing_fts_table_raises_catalog_index_missing_error(tmp_path: Path) ->
         search_filtered("dress", SearchFilters(in_stock_only=False), db_path=db)
 
 
+def test_catalog_index_missing_error_message_contains_build_command(
+    tmp_path: Path,
+) -> None:
+    """CatalogIndexMissingError message must tell the user how to fix it."""
+    db = tmp_path / "no_index.db"
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            """CREATE TABLE products (
+                product_id TEXT PRIMARY KEY, name TEXT, category TEXT, color TEXT,
+                brand TEXT, occasion TEXT, description TEXT, price_eur REAL,
+                sizes TEXT, in_stock INTEGER
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO products VALUES"
+            " ('P1','T','dress','blue','X','casual','D',50.0,'{}',1)"
+        )
+    with pytest.raises(CatalogIndexMissingError, match="uv run stylescout build-catalog"):
+        search_filtered("dress", SearchFilters(in_stock_only=False), db_path=db)
+
+
 # ---------------------------------------------------------------------------
 # Bug 2b: FTS special characters in query → safe, still returns real matches
 # ---------------------------------------------------------------------------
@@ -522,3 +573,53 @@ def test_size_filter_excludes_zero_stock_for_that_size(db_path: Path) -> None:
     ids = {r.product_id for r in results}
     assert "PROD-00001" in ids
     assert "PROD-00003" not in ids
+
+
+# ---------------------------------------------------------------------------
+# FTS index coverage: category and occasion columns
+#
+# PROD-00006 has category="accessory"; the word "accessory" is absent from its
+# name ("Pearl Stud"), brand ("Avon"), color ("white"), and description
+# ("Elegant pearl studs for evening wear.").  Finding it by the keyword
+# "accessory" therefore requires the FTS index to include the category column.
+#
+# PROD-00007 has occasion="wedding"; the word "wedding" is absent from its
+# name ("Ivory Pleated Midi"), brand ("Coast"), color ("ivory"), and
+# description ("Flowing pleated midi with delicate drape.").  Finding it by
+# the keyword "wedding" therefore requires the FTS index to include the
+# occasion column.
+# ---------------------------------------------------------------------------
+
+
+def test_fts_indexes_category_column(db_path: Path) -> None:
+    """Keyword 'accessory' must find PROD-00006 via the category column.
+
+    The word 'accessory' does not appear in that product's name, brand, color,
+    or description, so a match can only come from the category column being
+    in the FTS index.
+    """
+    results = search_filtered(
+        "accessory", SearchFilters(in_stock_only=False), db_path=db_path
+    )
+    ids = {r.product_id for r in results}
+    assert "PROD-00006" in ids, (
+        "Expected PROD-00006 (category='accessory') in results; "
+        "category column is probably not in the FTS index"
+    )
+
+
+def test_fts_indexes_occasion_column(db_path: Path) -> None:
+    """Keyword 'wedding' must find PROD-00007 via the occasion column.
+
+    The word 'wedding' does not appear in that product's name, brand, color,
+    or description, so a match can only come from the occasion column being
+    in the FTS index.
+    """
+    results = search_filtered(
+        "wedding", SearchFilters(in_stock_only=False), db_path=db_path
+    )
+    ids = {r.product_id for r in results}
+    assert "PROD-00007" in ids, (
+        "Expected PROD-00007 (occasion='wedding') in results; "
+        "occasion column is probably not in the FTS index"
+    )

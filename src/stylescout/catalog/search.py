@@ -1,20 +1,23 @@
 """Filtered keyword search over the SQLite product catalog.
 
 Strategy: FTS5 virtual table (products_fts) for bm25-ranked keyword matching
-over name, brand, color, and description; structured SQL filters (category,
-occasion, price range, in_stock, size) are applied as a JOIN predicate.
+over name, brand, color, category, occasion, and description (spec §5.1);
+structured SQL filters (category, occasion, price range, in_stock, size) are
+applied as a JOIN predicate.
 
 FTS index fields (searchable by keyword):
-    name, brand, color, description
+    name, brand, color, category, occasion, description
 
 Filter-only fields (SQL WHERE predicates, not tokenised by FTS):
-    category, occasion, price_eur, in_stock, sizes (via json_extract)
+    price_eur, in_stock, sizes (via json_extract)
+    category and occasion are also available as exact-match filters.
 
 The FTS table is an external-content table backed by `products`, so it never
 duplicates the actual column data. It must be rebuilt with
     INSERT INTO products_fts(products_fts) VALUES('rebuild')
 whenever the products table changes. build_fts_index() does this and is called
-by write_sqlite() in loader.py automatically.
+by write_sqlite() in loader.py automatically.  build_fts_index() drops and
+recreates the virtual table on each call so schema changes always take effect.
 
 Filter-only fallback:
     When the query is empty, None, contains only stopwords, or consists
@@ -24,8 +27,8 @@ Filter-only fallback:
     all products (up to `limit`), ordered by product_id.
 
 FTS MATCH is safe against SQL injection because the query string is a bound
-parameter. Malformed FTS queries raise sqlite3.OperationalError; the
-OperationalError handler falls back to filter-only rather than crashing.
+parameter. _require_fts_index() checks sqlite_master before the query so the
+error message is clear and does not depend on SQLite's error text.
 """
 
 from __future__ import annotations
@@ -50,7 +53,8 @@ _STOPWORDS: frozenset[str] = frozenset(
 # FTS virtual table name
 _FTS_TABLE = "products_fts"
 
-# SQL to create the FTS5 external-content table
+# SQL to create the FTS5 external-content table.
+# Columns must match the names in `products` exactly (content= contract).
 _CREATE_FTS_SQL = f"""
 CREATE VIRTUAL TABLE IF NOT EXISTS {_FTS_TABLE}
 USING fts5(
@@ -58,6 +62,8 @@ USING fts5(
     name,
     brand,
     color,
+    category,
+    occasion,
     description,
     content=products,
     content_rowid=rowid
@@ -73,7 +79,10 @@ _REBUILD_FTS_SQL = f"INSERT INTO {_FTS_TABLE}({_FTS_TABLE}) VALUES('rebuild')"
 
 
 class CatalogIndexMissingError(RuntimeError):
-    """Raised when products_fts does not exist; call build_fts_index() first."""
+    """Raised when products_fts does not exist.
+
+    Run `uv run stylescout build-catalog` to create it.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -116,11 +125,14 @@ class ProductHit(BaseModel):
 def build_fts_index(db_path: str | Path) -> None:
     """Create (or rebuild) the FTS5 index for the products table.
 
-    Safe to call repeatedly: CREATE VIRTUAL TABLE IF NOT EXISTS is a no-op when
-    the table exists, and `rebuild` re-indexes all current rows.
+    Drops the virtual table first so schema changes (added columns) always take
+    effect. DROP TABLE IF EXISTS is a no-op when the table does not yet exist,
+    so this is safe on a fresh database. After recreation, `rebuild` populates
+    the index from the current `products` rows.
     """
     db_path = Path(db_path)
     with sqlite3.connect(db_path) as conn:
+        conn.execute(f"DROP TABLE IF EXISTS {_FTS_TABLE}")
         conn.execute(_CREATE_FTS_SQL)
         conn.execute(_REBUILD_FTS_SQL)
         conn.commit()
@@ -141,15 +153,15 @@ def search_filtered(
     """Keyword search ranked by bm25, with structured filters.
 
     The FTS MATCH clause ranks results by term frequency across name, brand,
-    color, and description. Multi-word queries use OR semantics (any term
-    matches) so "blue dress" finds products containing "blue" or "dress".
+    color, category, occasion, and description (spec §5.1). Multi-word queries
+    use OR semantics so "blue dress" finds products containing either word.
     Structured filters are applied as WHERE predicates on the joined products
     table so they never touch FTS internals.
 
     When query is None, empty, whitespace-only, contains only stopwords, or
     consists entirely of tokens with no letter or digit, the FTS clause is
-    omitted entirely and only the structured filters are applied (filter-only
-    path). A stopwords-only query with no active filters returns all products
+    omitted and only the structured filters are applied (filter-only path).
+    A stopwords-only query with no active filters returns all products
     (up to `limit`), ordered by product_id.
 
     Returns up to `limit` ProductHit rows:
@@ -164,19 +176,14 @@ def search_filtered(
     fts_query = _to_fts_query(query or "")
     use_fts = bool(fts_query)
 
-    sql, params = _build_query(fts_query if use_fts else None, filters, limit)
-    try:
-        with sqlite3.connect(db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(sql, params).fetchall()
-    except sqlite3.OperationalError as exc:
-        if "no such table" in str(exc) and "products_fts" in str(exc):
-            raise CatalogIndexMissingError(
-                f"FTS index missing at {db_path}; call build_fts_index() first."
-            ) from exc
-        raise
+    db_path = Path(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        if use_fts:
+            _require_fts_index(conn, db_path)
+        sql, params = _build_query(fts_query if use_fts else None, filters, limit)
+        rows = conn.execute(sql, params).fetchall()
 
-    bm25_placeholder = 0.0
     return [
         ProductHit(
             product_id=row["product_id"],
@@ -187,7 +194,7 @@ def search_filtered(
             occasion=row["occasion"],
             price_eur=row["price_eur"],
             in_stock=row["in_stock"],
-            bm25_score=row["bm25_score"] if use_fts else bm25_placeholder,
+            bm25_score=row["bm25_score"] if use_fts else 0.0,
         )
         for row in rows
     ]
@@ -196,6 +203,22 @@ def search_filtered(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _require_fts_index(conn: sqlite3.Connection, db_path: Path) -> None:
+    """Raise CatalogIndexMissingError when products_fts is absent.
+
+    Checks sqlite_master directly rather than matching error message text.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (_FTS_TABLE,),
+    ).fetchone()
+    if row is None:
+        raise CatalogIndexMissingError(
+            f"FTS index missing at {db_path}; "
+            "run `uv run stylescout build-catalog`."
+        )
 
 
 def _to_fts_query(query: str | None) -> str:
