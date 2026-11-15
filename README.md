@@ -127,6 +127,28 @@ uv run ruff check .
 > changing the catalog or the embedding model.
 
 ---
+## Try it
+
+Once the catalog and the vector index are built (see Getting started), you can query the catalog from the terminal. No API key is needed.
+
+```bash
+uv run stylescout search "casual shirt" --max-price 60 --color blue
+```
+
+```
+  #  Name                                   Category      Color          Price    KW   Vec
+------------------------------------------------------------------------------------------
+  1  Basics Men Blue Shirt                  shirt         blue          29.69€     1     1
+  2  Myntra Men Blue Check Shirt            shirt         blue          52.81€     4     3
+  3  Madagascar3 Boys Blue Printed T-Shirt  shirt         blue          27.90€     7     7
+  4  Myntra Men Blue Diet Extreme T-shirt   shirt         blue          58.16€    13     4
+  5  ADIDAS Men Blue T-shirt                shirt         blue          22.48€     2    17
+```
+
+The results are ranked by hybrid search. **KW** is the product's rank in the keyword (bm25) results and **Vec** is its rank in the vector (embedding) results. The two rankings are combined with reciprocal rank fusion. Every result respects the filters (here a price of 60 EUR or less and the color blue), because the final candidates are re-checked against the SQLite catalog.
+
+The first run downloads the embedding model, so it is slower.
+-----
 
 ## Data
 
