@@ -7,9 +7,12 @@ Read `docs/SPEC.md` before any task. It is the source of truth. If code and spec
 disagree, stop and ask me.
 
 ## Commands
-- Install: `uv sync`
+- Install: `uv sync --extra dev`
 - Test: `uv run pytest`
 - Lint and format: `uv run ruff check . && uv run ruff format .`
+- Build catalog: `uv run stylescout build-catalog`
+- Build vector index: `uv run stylescout build-index`
+- Search catalog: `uv run stylescout search "<query>" [--mode hybrid|keyword|vector] [--top-k N] [--category ...] [--color ...] [--occasion ...] [--brand ...] [--min-price ...] [--max-price ...] [--size ...] [--include-out-of-stock]`
 - Chat in terminal: `uv run stylescout chat`
 - Run API: `uv run uvicorn stylescout.api.app:app --reload`
 - Eval: `uv run stylescout eval`
